@@ -111,8 +111,8 @@ const HeroSection = () => {
               </div>
             </div>
             
-            {/* Tech stack logos floating */}
-            <div className="absolute inset-0 flex items-center justify-center">
+            {/* Tech stack logos floating - moved lower */}
+            <div className="absolute inset-0 flex items-center justify-center translate-y-16">
               {techImages.map((tech, index) => (
                 <div 
                   key={tech}

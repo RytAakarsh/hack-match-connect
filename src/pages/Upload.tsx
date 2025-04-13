@@ -1,12 +1,13 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Send, Upload, User } from 'lucide-react';
+import { Send, Upload as UploadIcon, User, Camera } from 'lucide-react';
 import { mockDb, TechStack } from '@/services/mockDatabase';
 import { useToast } from '@/hooks/use-toast';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 
 type FormStep = 
   | 'greeting'
@@ -69,6 +70,15 @@ const UploadPage = () => {
   const [selectedTech, setSelectedTech] = useState<TechStack[]>([]);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto scroll to bottom when new messages are added
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [messages]);
 
   const addMessage = (text: string, sender: 'bot' | 'user') => {
     setMessages(prev => [...prev, { text, sender }]);
@@ -77,11 +87,11 @@ const UploadPage = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Don't proceed if input is empty (except for greeting step)
-    if (!inputValue.trim() && currentStep !== 'greeting') return;
+    // Don't proceed if input is empty (except for greeting step and picture step)
+    if (!inputValue.trim() && currentStep !== 'greeting' && currentStep !== 'picture') return;
     
     // Add user message to chat (except for greeting which doesn't need user input)
-    if (currentStep !== 'greeting') {
+    if (currentStep !== 'greeting' && currentStep !== 'picture') {
       addMessage(inputValue, 'user');
     }
     
@@ -90,6 +100,32 @@ const UploadPage = () => {
     
     // Clear input field
     setInputValue('');
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        setImagePreview(result);
+        setFormData(prev => ({ ...prev, profilePicture: result }));
+        
+        // Add a message from the user indicating they've uploaded an image
+        addMessage("I've uploaded my profile picture.", 'user');
+        
+        // Process to the next step
+        addMessage("Great picture! Now, what college or university do you attend?", 'bot');
+        setCurrentStep('college');
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleBrowseClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
   };
 
   const processInput = () => {
@@ -111,8 +147,12 @@ const UploadPage = () => {
           return;
         }
         setFormData(prev => ({ ...prev, email: inputValue }));
-        addMessage("Thanks! We'll use a placeholder image for now. In a real app, you'd upload your photo here.", 'bot');
-        setCurrentStep('college');
+        addMessage("Now let's add a profile picture. Click the 'Browse' button to upload an image.", 'bot');
+        setCurrentStep('picture');
+        break;
+        
+      case 'picture':
+        // This is now handled by handleFileChange
         break;
         
       case 'college':
@@ -198,6 +238,35 @@ const UploadPage = () => {
           </div>
           <h3 className="text-xl font-bold mb-2">Profile Created Successfully!</h3>
           <p className="text-muted-foreground">Redirecting you to the partners page...</p>
+        </div>
+      );
+    }
+    
+    if (currentStep === 'picture') {
+      return (
+        <div className="border-t border-gray-200 p-4">
+          <div className="flex flex-col items-center gap-4">
+            <Avatar className="w-24 h-24 border-2 border-brand-purple">
+              <AvatarImage src={imagePreview} alt="Profile" />
+              <AvatarFallback>
+                <User className="h-12 w-12 text-muted-foreground" />
+              </AvatarFallback>
+            </Avatar>
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              className="hidden" 
+              accept="image/*" 
+              onChange={handleFileChange}
+            />
+            <Button 
+              onClick={handleBrowseClick}
+              className="bg-brand-purple hover:bg-brand-purple/90 flex items-center gap-2"
+            >
+              <Camera className="h-4 w-4" />
+              Browse for Image
+            </Button>
+          </div>
         </div>
       );
     }
@@ -300,6 +369,7 @@ const UploadPage = () => {
               onChange={(e) => setInputValue(e.target.value)}
               placeholder="Is this information correct? (Yes/No)"
               className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-purple/50"
+              autoFocus
             />
             <Button type="submit" className="bg-brand-purple hover:bg-brand-purple/90">
               <Send className="h-4 w-4" />
@@ -330,6 +400,7 @@ const UploadPage = () => {
           onChange={(e) => setInputValue(e.target.value)}
           placeholder="Type your response..."
           className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-purple/50"
+          autoFocus
         />
         <Button type="submit" className="bg-brand-purple hover:bg-brand-purple/90">
           <Send className="h-4 w-4" />
@@ -355,7 +426,10 @@ const UploadPage = () => {
             </div>
             
             {/* Chat messages */}
-            <div className="p-4 max-h-96 overflow-y-auto flex flex-col gap-3">
+            <div 
+              ref={chatContainerRef} 
+              className="p-4 h-96 overflow-y-auto flex flex-col gap-3 scroll-smooth"
+            >
               {messages.map((msg, i) => (
                 <div 
                   key={i} 
@@ -363,7 +437,7 @@ const UploadPage = () => {
                     msg.sender === 'user' 
                       ? 'bg-brand-purple text-white self-end rounded-br-none' 
                       : 'bg-gray-100 text-foreground self-start rounded-bl-none'
-                  }`}
+                  } animate-fade-in`}
                 >
                   {msg.text}
                 </div>
